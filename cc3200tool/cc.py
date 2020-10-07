@@ -30,6 +30,7 @@ from collections import namedtuple
 import json
 import platform
 import serial
+import subprocess
 
 log = logging.getLogger()
 logging.basicConfig(stream=sys.stderr, level=logging.INFO,
@@ -108,7 +109,7 @@ def pinarg(extra=None):
         if apin.startswith('~'):
             invert = True
             apin = apin[1:]
-        if apin not in choices:
+        if (apin not in choices) and (not apin.startswith('GPIO.')):
             raise argparse.ArgumentTypeError("{} not one of {}".format(
                     apin, choices))
         return Pincfg(invert, apin)
@@ -583,6 +584,11 @@ class CC3200Connection(object):
             self.port.rts = in_reset
             time.sleep(.1)
             self.port.rts = not in_reset
+        if self._reset.pin.startswith('GPIO.'):
+            _pin = self._reset.pin.strip('GPIO.')
+            subprocess.call(['gpio', 'write', _pin, str(int(in_reset))])
+            time.sleep(0.1)
+            subprocess.call(['gpio', 'write', _pin, str(int(in_reset))])
 
     def _read_ack(self, timeout=None):
         ack_bytes = []
@@ -647,34 +653,20 @@ class CC3200Connection(object):
         log.debug("get last status got %s", hexify(status))
         return CC3x00Status(ord(status))
 
-    def _do_break(self, timeout, break_cycles):
-
-        time.sleep(0.8)
-        self.port.dtr = 0 # TODO: add function reset_pin(0)
-        log.info("break_on")
-        for i in range(break_cycles):
-            self.port.send_break()
-        log.info("break_off")
-
-        if self._read_ack(0.1):
-            return True
-        self.port.send_break(1.0)
+    def _do_break(self, timeout):
+        self.port.break_condition = True
+        self._do_reset(False)
         if self._read_ack(timeout):
+            self.port.break_condition = False
             return True
         else:
-            self.port.dtr = 1 # TODO: add function reset_pin(1)
+            self.port.break_condition = False
             return False
 
-    def _try_breaking(self, tries=7, timeout=2):
-        if platform.system() == 'Darwin': # For mac os
-            break_cycles = 3
-        elif platform.system() == 'Linux':
-            break_cycles = 10
+    def _try_breaking(self, tries=7, timeout=5):
         for _ in range(tries):
-            if self._do_break(timeout, break_cycles):
+            if self._do_break(timeout):
                 break
-            if platform.system() == 'Linux':
-                break_cycles = break_cycles + 1
 
     def _get_version(self):
         self._send_packet(OPCODE_GET_VERSION_INFO)
