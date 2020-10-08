@@ -586,6 +586,7 @@ class CC3200Connection(object):
             self.port.rts = not in_reset
         if self._reset.pin.startswith('GPIO.'):
             _pin = self._reset.pin.strip('GPIO.')
+            subprocess.call(['gpio', 'mode', _pin, 'out'])
             subprocess.call(['gpio', 'write', _pin, str(int(in_reset))])
             time.sleep(0.1)
             subprocess.call(['gpio', 'write', _pin, str(int(in_reset))])
