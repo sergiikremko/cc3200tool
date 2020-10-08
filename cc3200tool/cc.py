@@ -575,22 +575,22 @@ class CC3200Connection(object):
             return
         
         in_reset = True ^ self._reset.invert
-        log.info('Reset device by set {} pin to state {}'.format(self._reset.pin, not in_reset))
+        log.info('Reset device by set {} pin to state {}'.format(self._reset.pin, in_reset))
         if self._reset.pin == 'dtr':
-            self.port.dtr = not in_reset
-            time.sleep(.1)
             self.port.dtr = in_reset
+            time.sleep(.1)
+            self.port.dtr = not in_reset
 
         if self._reset.pin == 'rts':
-            self.port.rts = not in_reset
-            time.sleep(.1)
             self.port.rts = in_reset
+            time.sleep(.1)
+            self.port.rts = not in_reset
         if self._reset.pin.startswith('GPIO.'):
             _pin = self._reset.pin.strip('GPIO.')
             subprocess.call(['gpio', 'mode', _pin, 'out'])
-            subprocess.call(['gpio', 'write', _pin, str(int(not in_reset))])
-            time.sleep(0.1)
             subprocess.call(['gpio', 'write', _pin, str(int(in_reset))])
+            time.sleep(0.1)
+            subprocess.call(['gpio', 'write', _pin, str(int(not in_reset))])
 
     def _read_ack(self, timeout=None):
         ack_bytes = []
@@ -939,25 +939,14 @@ class CC3200Connection(object):
         command = OPCODE_SWITCH_2_APPS + struct.pack(">I", 26666667)
         self._send_packet(command)
         log.info("Resetting communications ...")
-        if platform.system() == 'Darwin': # mac os
-            for i in range(3):
-                self.port.send_break()
-            if not self._read_ack():
-                raise CC3200Error("no ACK after Switch UART to APPS MCU command")
-        elif platform.system() == 'Linux':
-            if self.vinfo.is_cc3230sm: # Graham Cracker workaround
-                break_cycles = 9
-            else:
-                break_cycles = 10
-            for i in range(break_cycles):
-                self.port.send_break()
-            if not self._read_ack():
-                raise CC3200Error("no ACK after Switch UART to APPS MCU command")
+        for i in range(4):
+            self.port.break_condition = True
+            time.sleep(0.1)
+            if self._read_ack():
+                self.port.break_condition = False
+                break
         else:
-            time.sleep(1)
-            self.port.send_break(0.2)
-            if not self._read_ack():
-                raise CC3200Error("no ACK after Switch UART to APPS MCU command")  
+            raise CC3200Error("no ACK after Switch UART to APPS MCU command")
         for i in range(8):
             self.vinfo_apps = self._get_version()
             if self.vinfo.bootloader[1] >= 4:
