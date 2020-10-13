@@ -674,6 +674,18 @@ class CC3200Connection(object):
         else:
             self._set_reset_pin(False)
             return False
+        
+    def _do_break_rpi(self, timeout, break_cycles):
+        log.info("break_on")
+        self.port.break_condition = True
+        self._set_reset_pin(True)
+        time.sleep(0.1)
+        self._set_reset_pin(False)
+        ack = self._read_ack(timeout=5)
+        self.port.break_condition = False
+        log.info("break_off")
+        return ack
+
 
     def _try_breaking(self, tries=7, timeout=2):
         if platform.system() == 'Darwin': # For mac os
@@ -681,8 +693,12 @@ class CC3200Connection(object):
         elif platform.system() == 'Linux':
             break_cycles = 10
         for _ in range(tries):
-            if self._do_break(timeout, break_cycles):
-                break
+            if self._reset.pin.startswith('GPIO'):
+                if self._do_break_rpi(timeout, break_cycles):
+                    break
+            else:
+                if self._do_break(timeout, break_cycles):
+                    break
             if platform.system() == 'Linux':
                 break_cycles = break_cycles + 1
 
