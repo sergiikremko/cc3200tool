@@ -971,7 +971,16 @@ class CC3200Connection(object):
         command = OPCODE_SWITCH_2_APPS + struct.pack(">I", 26666667)
         self._send_packet(command)
         log.info("Resetting communications ...")
-        if platform.system() == 'Darwin': # mac os
+        if self._reset.pin.startswith('GPIO'):
+            for i in range(4):
+                self.port.break_condition = True
+                time.sleep(0.1)
+                if self._read_ack():
+                    self.port.break_condition = False
+                    break
+            else:
+                raise CC3200Error("no ACK after Switch UART to APPS MCU command")
+        elif platform.system() == 'Darwin': # mac os
             for i in range(3):
                 self.port.send_break()
             if not self._read_ack():
