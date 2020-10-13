@@ -667,11 +667,9 @@ class CC3200Connection(object):
         log.info("break_off")
 
         if self._read_ack(0.1):
-            self._set_reset_pin(False)
             return True
         self.port.send_break(1.0)
         if self._read_ack(timeout):
-            self._set_reset_pin(False)
             return True
         else:
             self._set_reset_pin(False)
