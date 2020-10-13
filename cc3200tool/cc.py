@@ -574,12 +574,13 @@ class CC3200Connection(object):
             raw_input()
             return
         
-        in_reset = True ^ self._reset.invert
-        self._set_reset_pin(in_reset)
+        # in_reset = True ^ self._reset.invert
+        self._set_reset_pin(True)
         time.sleep(.1)
-        self._set_reset_pin(not in_reset)
+        self._set_reset_pin(False)
         
     def _set_reset_pin(self, state):
+        state = not state if self._reset.invert else state
         log.info('Setting {} pin: {}'.format(self._reset.pin, state))
         if self._reset.pin == 'dtr':
             self.port.dtr = int(state)
