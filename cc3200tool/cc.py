@@ -585,15 +585,17 @@ class CC3200Connection(object):
         
     def _set_reset_pin(self, state):
         state = not state if self._reset.invert else state
-        log.info('Setting {} pin: {}'.format(self._reset.pin, state))
         if self._reset.pin == 'dtr':
+            log.info('Setting dtr pin: {}'.format(state))
             self.port.dtr = int(state)
 
         if self._reset.pin == 'rts':
+            log.info('Setting rst pin: {}'.format(state))
             self.port.rts = int(state)
 
         if self._reset.pin == 'gpio':
             _pin = self._reset_pin
+            log.info('Setting GPIO {} pin: {}'.format(_pin, state))
             subprocess.call(['gpio', 'mode', _pin, 'out'])
             subprocess.call(['gpio', 'write', _pin, str(int(state))])
 
