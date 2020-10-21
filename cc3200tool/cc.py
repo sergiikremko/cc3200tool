@@ -100,7 +100,7 @@ Pincfg = namedtuple('Pincfg', ['invert', 'pin'])
 
 
 def pinarg(extra=None):
-    choices = ['dtr', 'rts', 'none']
+    choices = ['dtr', 'rts', 'gpio', 'none']
     if extra:
         choices.extend(extra)
 
@@ -109,7 +109,7 @@ def pinarg(extra=None):
         if apin.startswith('~'):
             invert = True
             apin = apin[1:]
-        if (apin not in choices) and (not apin.startswith('GPIO.')):
+        if apin not in choices:
             raise argparse.ArgumentTypeError("{} not one of {}".format(
                     apin, choices))
         return Pincfg(invert, apin)
@@ -130,6 +130,9 @@ parser.add_argument(
 parser.add_argument(
         "--reset", type=pinarg(['prompt']), default="none",
         help="dtr, rts, none or prompt, optinally prefixed by ~ to invert")
+parser.add_argument(
+        "--reset-pin", default=None,
+        help="wPi number of GPIO pin wich will be used to reset")
 parser.add_argument(
         "--sop2", type=pinarg(), default="none",
         help="dtr, rts or none, optinally prefixed by ~ to invert")
@@ -529,10 +532,11 @@ class CC3200Connection(object):
     TIMEOUT = 60
     DEFAULT_SLFS_SIZE = "1M"
 
-    def __init__(self, port, reset=None, sop2=None, erase_timeout=ERASE_TIMEOUT):
+    def __init__(self, port, reset=None, sop2=None, reset_pin=None, erase_timeout=ERASE_TIMEOUT):
         self.port = port
         port.timeout = self.TIMEOUT
         self._reset = reset
+        self._reset_pin = reset_pin
         self._sop2 = sop2
         self._erase_timeout = erase_timeout
 
@@ -588,8 +592,8 @@ class CC3200Connection(object):
         if self._reset.pin == 'rts':
             self.port.rts = int(state)
 
-        if self._reset.pin.startswith('GPIO.'):
-            _pin = self._reset.pin.strip('GPIO.')
+        if self._reset.pin == 'gpio':
+            _pin = self._reset_pin
             subprocess.call(['gpio', 'mode', _pin, 'out'])
             subprocess.call(['gpio', 'write', _pin, str(int(state))])
 
@@ -693,7 +697,7 @@ class CC3200Connection(object):
         elif platform.system() == 'Linux':
             break_cycles = 10
         for _ in range(tries):
-            if self._reset.pin.startswith('GPIO'):
+            if self._reset.pin == 'gpio':
                 if self._do_break_rpi(timeout, break_cycles):
                     break
             else:
@@ -971,7 +975,7 @@ class CC3200Connection(object):
         command = OPCODE_SWITCH_2_APPS + struct.pack(">I", 26666667)
         self._send_packet(command)
         log.info("Resetting communications ...")
-        if self._reset.pin.startswith('GPIO'):
+        if self._reset.pin == 'gpio':
             for i in range(4):
                 self.port.break_condition = True
                 time.sleep(0.1)
@@ -1257,6 +1261,7 @@ def main():
 
     sop2_method = args.sop2
     reset_method = args.reset
+    reset_pin = args.reset_pin
     if sop2_method.pin == reset_method.pin and reset_method.pin != 'none':
         log.error("sop2 and reset methods cannot be the same output pin")
         sys.exit(-3)
@@ -1275,7 +1280,7 @@ def main():
         log.warn("unable to open serial port %s: %s", port_name, e)
         sys.exit(-2)
 
-    cc = CC3200Connection(p, reset_method, sop2_method, erase_timeout=args.erase_timeout)
+    cc = CC3200Connection(p, reset_method, sop2_method, reset_pin, erase_timeout=args.erase_timeout)
     try:
         cc.connect()
         log.info("connected to target")
